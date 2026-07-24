@@ -1510,7 +1510,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; margin: 
 .frame{width:100%; max-width:460px; height:100vh; height:100dvh; background:var(--bg); position:relative; display:flex; flex-direction:column; overflow:hidden; padding-top:env(safe-area-inset-top); box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(30,42,39,.10);}
 @media (max-width:480px){ .frame{box-shadow:none;} }
 
-.app-scroll{flex:1; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; padding-bottom:96px;}
+.app-scroll{flex:1; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; padding-bottom:8px;}
 .page{padding:20px 18px 28px; display:flex; flex-direction:column; gap:16px;}
 .pad-h{padding:0;}
 
@@ -1725,7 +1725,7 @@ h1,h2,h3{margin:0;}
 .toast{position:fixed; bottom:104px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:99px; font-size:13px; font-weight:500; z-index:70; animation:fade .2s; white-space:nowrap;}
 
 /* nav */
-.bottom-nav{position:absolute; bottom:0; left:0; right:0; background:rgba(255,255,255,.92); backdrop-filter:blur(12px); border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom));}
+.bottom-nav{flex-shrink:0; background:rgba(255,255,255,.92); backdrop-filter:blur(12px); border-top:1px solid var(--line); display:flex; padding:8px 6px calc(10px + env(safe-area-inset-bottom));}
 .nav-btn{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; color:var(--muted); font-size:10.5px; font-weight:600; cursor:pointer; padding:4px 0;}
 .nav-btn.on{color:var(--brand);}
 .nav-btn.big{color:var(--brand);}
