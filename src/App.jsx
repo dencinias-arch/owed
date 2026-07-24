@@ -1111,7 +1111,15 @@ function NotificationsPanel({ onClose }) {
 
 function SettingsPage({ user, setUser }) {
   const [toast, setToast] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ name: user.name, email: user.email });
   const ping = (m) => { setToast(m); setTimeout(() => setToast(""), 1800); };
+  const startEdit = () => { setDraft({ name: user.name, email: user.email }); setEditing(true); };
+  const saveEdit = () => {
+    if (!draft.name.trim() || !draft.email.trim()) return;
+    setUser({ ...user, name: draft.name.trim(), email: draft.email.trim() });
+    setEditing(false); ping("Profile updated.");
+  };
   const rows = [
     { Icon: Bell, label: "Notification preferences", sub: "Push and email alerts", act: () => ping("Notification settings would open here.") },
     { Icon: Clock, label: "Default reminder timing", sub: "3 days before expected date", act: () => ping("Reminder timing would open here.") },
@@ -1125,13 +1133,30 @@ function SettingsPage({ user, setUser }) {
   return (
     <div className="page">
       <h1 className="h1 pad-h">Settings</h1>
-      <div className="card profile">
-        <div className="avatar lg">{user.name[0]}</div>
-        <div>
-          <div className="p-name">{user.name}</div>
-          <div className="p-mail">{user.email}</div>
+      {editing ? (
+        <div className="card panel">
+          <div className="panel-title">Edit profile</div>
+          <label className="f-label">Name
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          </label>
+          <label className="f-label">Email
+            <input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+          </label>
+          <div className="btn-row tight">
+            <button className="btn ghost sm" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn primary sm" disabled={!draft.name.trim() || !draft.email.trim()} onClick={saveEdit}>Save</button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button className="card profile profile-edit" onClick={startEdit}>
+          <div className="avatar lg">{user.name[0]}</div>
+          <div className="profile-mid">
+            <div className="p-name">{user.name}</div>
+            <div className="p-mail">{user.email}</div>
+          </div>
+          <PenLine size={16} className="feed-chev" />
+        </button>
+      )}
       <div className="card recovered-card">
         <div>
           <div className="rc-l">Owed has helped you recover</div>
@@ -1186,7 +1211,12 @@ function Wordmark({ size = 44, light }) {
 function Auth({ onEnter }) {
   const [screen, setScreen] = useState("welcome"); // welcome | signup | login | forgot
   const [f, setF] = useState({ name: "", email: "", pw: "" });
+  const [toast, setToast] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const social = (provider) => {
+    setToast(`${provider} sign-in needs a backend to work for real. This button is a placeholder for now.`);
+    setTimeout(() => setToast(""), 2600);
+  };
 
   if (screen === "welcome") return (
     <div className="auth">
@@ -1204,11 +1234,28 @@ function Auth({ onEnter }) {
 
   const back = <button className="icon-btn" onClick={() => setScreen("welcome")}><ChevronLeft size={20} /></button>;
 
+  const SocialRow = () => (
+    <>
+      <div className="social-row">
+        <button className="btn ghost sm social-btn" onClick={() => social("Google")}>
+          <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 6.1 29.5 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.3 35.5 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.3 5.3C40.9 36.6 44 31 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+          Google
+        </button>
+        <button className="btn ghost sm social-btn" onClick={() => social("Meta")}>
+          <svg width="16" height="16" viewBox="0 0 36 36"><path fill="#1877F2" d="M36 18c0-9.9-8.1-18-18-18S0 8.1 0 18c0 8.9 6.5 16.3 15 17.7V23.2h-4.5V18H15v-4c0-4.4 2.6-6.9 6.7-6.9 1.9 0 3.9.3 3.9.3v4.3h-2.2c-2.2 0-2.9 1.4-2.9 2.7V18h4.9l-.8 5.2H21v12.5C29.5 34.3 36 26.9 36 18z"/></svg>
+          Meta
+        </button>
+      </div>
+      <div className="or-line"><span>or</span></div>
+    </>
+  );
+
   if (screen === "signup") return (
     <div className="auth form-mode">
       <div className="detail-top">{back}</div>
       <Wordmark size={36} />
       <h1 className="h1">Create your account</h1>
+      <SocialRow />
       <div className="form card">
         <label className="f-label">Name<input value={f.name} onChange={set("name")} placeholder="Your name" /></label>
         <label className="f-label">Email<input type="email" value={f.email} onChange={set("email")} placeholder="you@example.com" /></label>
@@ -1216,6 +1263,7 @@ function Auth({ onEnter }) {
       </div>
       <button className="btn primary block" disabled={!f.name || !f.email || f.pw.length < 8}
         onClick={() => onEnter(f.name, f.email, true)}>Continue</button>
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 
@@ -1224,6 +1272,7 @@ function Auth({ onEnter }) {
       <div className="detail-top">{back}</div>
       <Wordmark size={36} />
       <h1 className="h1">Welcome back</h1>
+      <SocialRow />
       <div className="form card">
         <label className="f-label">Email<input type="email" value={f.email} onChange={set("email")} placeholder="you@example.com" /></label>
         <label className="f-label">Password<input type="password" value={f.pw} onChange={set("pw")} /></label>
@@ -1231,6 +1280,7 @@ function Auth({ onEnter }) {
       <button className="btn primary block" disabled={!f.email || !f.pw}
         onClick={() => onEnter("Jordan Reyes", f.email, false)}>Log in</button>
       <button className="link center" onClick={() => setScreen("forgot")}>Forgot password?</button>
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 
@@ -1442,6 +1492,7 @@ function Shell({ children }) {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap');
 
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; margin: 0; }
 .owed-root {
   --bg:#F4F6F2; --surface:#FFFFFF; --ink:#1E2A27; --muted:#6B7772; --line:#E3E8E1;
   --brand:#284B44; --brand-deep:#1C3833;
@@ -1450,16 +1501,16 @@ const CSS = `
   --red:#AC4238; --red-soft:#F8E9E6;
   --info:#3E5E8C; --info-soft:#E9EEF6;
   --r:18px; --shadow:0 1px 2px rgba(30,42,39,.05), 0 8px 24px rgba(30,42,39,.06);
-  min-height:100vh; background:linear-gradient(180deg,#EAEEE7,#F4F6F2 240px);
-  display:flex; justify-content:center; padding:0;
+  height:100vh; height:100dvh; background:linear-gradient(180deg,#EAEEE7,#F4F6F2 240px);
+  display:flex; justify-content:center; padding:0; overflow:hidden;
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   color:var(--ink); -webkit-font-smoothing:antialiased;
 }
 .owed-root *{box-sizing:border-box; font-family:inherit;}
-.frame{width:100%; max-width:460px; min-height:100vh; background:var(--bg); position:relative; display:flex; flex-direction:column; box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(30,42,39,.10);}
+.frame{width:100%; max-width:460px; height:100vh; height:100dvh; background:var(--bg); position:relative; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(30,42,39,.10);}
 @media (max-width:480px){ .frame{box-shadow:none;} }
 
-.app-scroll{flex:1; overflow-y:auto; padding-bottom:96px;}
+.app-scroll{flex:1; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; padding-bottom:96px;}
 .page{padding:20px 18px 28px; display:flex; flex-direction:column; gap:16px;}
 .pad-h{padding:0;}
 
@@ -1658,6 +1709,8 @@ h1,h2,h3{margin:0;}
 
 /* settings */
 .profile{display:flex; gap:14px; align-items:center; padding:16px;}
+.profile-edit{width:100%; cursor:pointer; text-align:left;}
+.profile-mid{flex:1;}
 .p-name{font-weight:700; font-size:16px;}
 .p-mail{font-size:13px; color:var(--muted);}
 .recovered-card{background:var(--green-soft); border-color:#D4E8DC; display:flex; justify-content:space-between; align-items:center; padding:16px; color:var(--green);}
@@ -1707,8 +1760,13 @@ h1,h2,h3{margin:0;}
 .detail-thing{font-size:26px; line-height:1.25; padding:0 12px;}
 .rec-thing{font-size:28px; line-height:1.3; padding:0 8px;}
 
+.social-row{display:flex; gap:10px;}
+.social-btn{display:flex; align-items:center; justify-content:center; gap:8px;}
+.or-line{display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; margin:2px 0;}
+.or-line::before,.or-line::after{content:""; flex:1; height:1px; background:var(--line);}
+
 /* auth */
-.auth{min-height:100vh; display:flex; flex-direction:column; justify-content:space-between; background:linear-gradient(165deg,var(--brand) 0%,var(--brand-deep) 100%); padding:64px 26px 44px; color:#fff;}
+.auth{height:100%; overflow-y:auto; display:flex; flex-direction:column; justify-content:space-between; background:linear-gradient(165deg,var(--brand) 0%,var(--brand-deep) 100%); padding:64px 26px 44px; color:#fff;}
 .auth.form-mode{background:var(--bg); color:var(--ink); justify-content:flex-start; gap:18px; padding:24px 20px;}
 .auth-hero{display:flex; flex-direction:column; gap:14px; margin-top:48px;}
 .auth-tag{font-family:'Fraunces',Georgia,serif; font-size:24px; font-weight:600; line-height:1.25; margin:0;}
