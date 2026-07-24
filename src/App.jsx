@@ -1507,7 +1507,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; margin: 
   color:var(--ink); -webkit-font-smoothing:antialiased;
 }
 .owed-root *{box-sizing:border-box; font-family:inherit;}
-.frame{width:100%; max-width:460px; height:100vh; height:100dvh; background:var(--bg); position:relative; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(30,42,39,.10);}
+.frame{width:100%; max-width:460px; height:100vh; height:100dvh; background:var(--bg); position:relative; display:flex; flex-direction:column; overflow:hidden; padding-top:env(safe-area-inset-top); box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(30,42,39,.10);}
 @media (max-width:480px){ .frame{box-shadow:none;} }
 
 .app-scroll{flex:1; overflow-y:auto; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; padding-bottom:96px;}
