@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { supabase } from "./supabaseClient";
 import {
   Home, ListChecks, PlusCircle, Activity, Settings as SettingsIcon,
   Bell, ChevronRight, ChevronLeft, Briefcase, RotateCcw, Shield, CreditCard,
@@ -135,6 +136,20 @@ const remaining = (it) => Math.max(0, +(it.amount - it.received).toFixed(2));
 
 let idc = 100;
 const nid = () => String(++idc);
+
+/* ---------------- supabase field mapping ---------------- */
+const ITEM_FIELD_MAP = { owedBy: "owed_by", submittedDate: "submitted_date", expectedDate: "expected_date", receivedDate: "received_date", reminderDate: "reminder_date" };
+const ACT_FIELD_MAP = { itemId: "item_id" };
+function toDb(map, obj) {
+  const out = {};
+  for (const k in obj) out[map[k] || k] = obj[k];
+  return out;
+}
+function fromDb(map, row) {
+  const out = { ...row };
+  for (const camel in map) { out[camel] = row[map[camel]]; delete out[map[camel]]; }
+  return out;
+}
 
 const seedItems = [
   {
@@ -1109,15 +1124,15 @@ function NotificationsPanel({ onClose }) {
 
 /* ---------------- settings ---------------- */
 
-function SettingsPage({ user, setUser }) {
+function SettingsPage({ user, setUser, onSignOut }) {
   const [toast, setToast] = useState("");
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ name: user.name, email: user.email });
+  const [draft, setDraft] = useState({ name: user.name });
   const ping = (m) => { setToast(m); setTimeout(() => setToast(""), 1800); };
-  const startEdit = () => { setDraft({ name: user.name, email: user.email }); setEditing(true); };
+  const startEdit = () => { setDraft({ name: user.name }); setEditing(true); };
   const saveEdit = () => {
-    if (!draft.name.trim() || !draft.email.trim()) return;
-    setUser({ ...user, name: draft.name.trim(), email: draft.email.trim() });
+    if (!draft.name.trim()) return;
+    setUser({ ...user, name: draft.name.trim() });
     setEditing(false); ping("Profile updated.");
   };
   const rows = [
@@ -1129,6 +1144,7 @@ function SettingsPage({ user, setUser }) {
     { Icon: Lock, label: "Privacy and security", sub: "Passcode, data controls", act: () => ping("Privacy settings would open here.") },
     { Icon: Star, label: "Subscription", sub: "Owed Plus · free trial", act: () => ping("Subscription details would open here.") },
     { Icon: HelpCircle, label: "Help and feedback", sub: "Guides and contact", act: () => ping("Help center would open here.") },
+    { Icon: KeyRound, label: "Log out", sub: user.email, act: onSignOut },
   ];
   return (
     <div className="page">
@@ -1140,11 +1156,12 @@ function SettingsPage({ user, setUser }) {
             <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </label>
           <label className="f-label">Email
-            <input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+            <input value={user.email} readOnly disabled />
           </label>
+          <div className="hint" style={{ marginTop: -6, marginBottom: 10 }}>Email is tied to your sign-in link and cannot be changed here.</div>
           <div className="btn-row tight">
             <button className="btn ghost sm" onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn primary sm" disabled={!draft.name.trim() || !draft.email.trim()} onClick={saveEdit}>Save</button>
+            <button className="btn primary sm" disabled={!draft.name.trim()} onClick={saveEdit}>Save</button>
           </div>
         </div>
       ) : (
@@ -1208,14 +1225,22 @@ function Wordmark({ size = 44, light }) {
   );
 }
 
-function Auth({ onEnter }) {
-  const [screen, setScreen] = useState("welcome"); // welcome | signup | login | forgot
-  const [f, setF] = useState({ name: "", email: "", pw: "" });
+function Auth() {
+  const [screen, setScreen] = useState("welcome"); // welcome | link | sent
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [toast, setToast] = useState("");
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const social = (provider) => {
-    setToast(`${provider} sign-in needs a backend to work for real. This button is a placeholder for now.`);
-    setTimeout(() => setToast(""), 2600);
+  const [sending, setSending] = useState(false);
+
+  const sendLink = async () => {
+    setSending(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } },
+    });
+    setSending(false);
+    if (error) { setToast(error.message); setTimeout(() => setToast(""), 3200); return; }
+    setScreen("sent");
   };
 
   if (screen === "welcome") return (
@@ -1226,61 +1251,20 @@ function Auth({ onEnter }) {
         <p className="auth-sub">Reimbursements, refunds, credits, and IOUs, all in one calm place, until every dollar lands.</p>
       </div>
       <div className="auth-actions">
-        <button className="btn light block" onClick={() => setScreen("signup")}>Create account</button>
-        <button className="btn ghost-light block" onClick={() => setScreen("login")}>Log in</button>
+        <button className="btn light block" onClick={() => setScreen("link")}>Continue with email</button>
       </div>
     </div>
   );
 
   const back = <button className="icon-btn" onClick={() => setScreen("welcome")}><ChevronLeft size={20} /></button>;
 
-  const SocialRow = () => (
-    <>
-      <div className="social-row">
-        <button className="btn ghost sm social-btn" onClick={() => social("Google")}>
-          <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 6.1 29.5 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.3 35.5 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.3 5.3C40.9 36.6 44 31 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
-          Google
-        </button>
-        <button className="btn ghost sm social-btn" onClick={() => social("Meta")}>
-          <svg width="16" height="16" viewBox="0 0 36 36"><path fill="#1877F2" d="M36 18c0-9.9-8.1-18-18-18S0 8.1 0 18c0 8.9 6.5 16.3 15 17.7V23.2h-4.5V18H15v-4c0-4.4 2.6-6.9 6.7-6.9 1.9 0 3.9.3 3.9.3v4.3h-2.2c-2.2 0-2.9 1.4-2.9 2.7V18h4.9l-.8 5.2H21v12.5C29.5 34.3 36 26.9 36 18z"/></svg>
-          Meta
-        </button>
-      </div>
-      <div className="or-line"><span>or</span></div>
-    </>
-  );
-
-  if (screen === "signup") return (
+  if (screen === "sent") return (
     <div className="auth form-mode">
       <div className="detail-top">{back}</div>
       <Wordmark size={36} />
-      <h1 className="h1">Create your account</h1>
-      <SocialRow />
-      <div className="form card">
-        <label className="f-label">Name<input value={f.name} onChange={set("name")} placeholder="Your name" /></label>
-        <label className="f-label">Email<input type="email" value={f.email} onChange={set("email")} placeholder="you@example.com" /></label>
-        <label className="f-label">Password<input type="password" value={f.pw} onChange={set("pw")} placeholder="8+ characters" /></label>
-      </div>
-      <button className="btn primary block" disabled={!f.name || !f.email || f.pw.length < 8}
-        onClick={() => onEnter(f.name, f.email, true)}>Continue</button>
-      {toast && <div className="toast">{toast}</div>}
-    </div>
-  );
-
-  if (screen === "login") return (
-    <div className="auth form-mode">
-      <div className="detail-top">{back}</div>
-      <Wordmark size={36} />
-      <h1 className="h1">Welcome back</h1>
-      <SocialRow />
-      <div className="form card">
-        <label className="f-label">Email<input type="email" value={f.email} onChange={set("email")} placeholder="you@example.com" /></label>
-        <label className="f-label">Password<input type="password" value={f.pw} onChange={set("pw")} /></label>
-      </div>
-      <button className="btn primary block" disabled={!f.email || !f.pw}
-        onClick={() => onEnter("Jordan Reyes", f.email, false)}>Log in</button>
-      <button className="link center" onClick={() => setScreen("forgot")}>Forgot password?</button>
-      {toast && <div className="toast">{toast}</div>}
+      <h1 className="h1">Check your email</h1>
+      <p className="lede">We sent a sign-in link to {email}. Open it on this device to log in, no password needed.</p>
+      <button className="btn ghost block" onClick={() => setScreen("link")}>Use a different email</button>
     </div>
   );
 
@@ -1288,12 +1272,16 @@ function Auth({ onEnter }) {
     <div className="auth form-mode">
       <div className="detail-top">{back}</div>
       <Wordmark size={36} />
-      <h1 className="h1">Reset your password</h1>
-      <p className="lede">Enter your email and we'll send a reset link.</p>
+      <h1 className="h1">Sign in or sign up</h1>
+      <p className="lede">Enter your email and we will send you a link. First time here also add your name.</p>
       <div className="form card">
-        <label className="f-label">Email<input type="email" value={f.email} onChange={set("email")} placeholder="you@example.com" /></label>
+        <label className="f-label">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (new accounts)" /></label>
+        <label className="f-label">Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" /></label>
       </div>
-      <button className="btn primary block" disabled={!f.email} onClick={() => setScreen("login")}>Send reset link</button>
+      <button className="btn primary block" disabled={!email.trim() || sending} onClick={sendLink}>
+        {sending ? "Sending…" : "Send sign-in link"}
+      </button>
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
@@ -1350,13 +1338,11 @@ function Onboarding({ name, onDone }) {
 /* ---------------- root app ---------------- */
 
 export default function OwedApp() {
-  const [phase, setPhase] = useState("auth"); // auth | onboarding | app
-  const [user, setUser] = useState({
-    name: "Jordan Reyes", email: "jordan@example.com", recovered: 120,
-    handles: { venmo: "jordan-reyes", cashapp: "jordanreyes", paypal: "" },
-  });
-  const [items, setItems] = useState(seedItems);
-  const [activities, setActivities] = useState(seedActivities);
+  const [phase, setPhase] = useState("loading"); // loading | auth | onboarding | app
+  const [session, setSession] = useState(null);
+  const [user, setUser] = useState({ name: "", email: "", recovered: 0, handles: {} });
+  const [items, setItems] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [tab, setTab] = useState("dash");
   const [itemsTab, setItemsTab] = useState("Active");
   const [detailId, setDetailId] = useState(null);
@@ -1367,11 +1353,94 @@ export default function OwedApp() {
 
   const item = items.find((i) => i.id === detailId);
 
-  const log = (itemId, entry) =>
-    setActivities((a) => [{ id: nid(), itemId, date: iso(today()), ...entry }, ...a]);
+  const loadData = async (uid) => {
+    const [{ data: itemRows }, { data: actRows }, { data: docRows }] = await Promise.all([
+      supabase.from("items").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
+      supabase.from("activities").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
+      supabase.from("documents").select("*").eq("user_id", uid),
+    ]);
+    const docsByItem = {};
+    (docRows || []).forEach((d) => {
+      (docsByItem[d.item_id] = docsByItem[d.item_id] || []).push({ id: d.id, name: d.file_name, type: d.file_type, date: d.upload_date });
+    });
+    setItems((itemRows || []).map((r) => ({ ...fromDb(ITEM_FIELD_MAP, r), docs: docsByItem[r.id] || [] })));
+    setActivities((actRows || []).map((r) => fromDb(ACT_FIELD_MAP, r)));
+  };
 
-  const updateItem = (id, patch) =>
+  const loadProfile = async (sessionUser) => {
+    let { data: prof } = await supabase.from("profiles").select("*").eq("id", sessionUser.id).maybeSingle();
+    let isNew = false;
+    if (!prof) {
+      isNew = true;
+      const nm = sessionUser.user_metadata?.full_name || sessionUser.email.split("@")[0];
+      const { data: created } = await supabase.from("profiles").insert({ id: sessionUser.id, name: nm, recovered: 0, handles: {} }).select().maybeSingle();
+      prof = created;
+    }
+    setUser({ name: (prof && prof.name) || "", email: sessionUser.email, recovered: (prof && prof.recovered) || 0, handles: (prof && prof.handles) || {} });
+    return isNew;
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!mounted) return;
+      setSession(s);
+      if (s) {
+        const isNew = await loadProfile(s.user);
+        await loadData(s.user.id);
+        if (mounted) setPhase(isNew ? "onboarding" : "app");
+      } else {
+        setPhase("auth");
+      }
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      setSession(newSession);
+      if (newSession) {
+        const isNew = await loadProfile(newSession.user);
+        await loadData(newSession.user.id);
+        setPhase((p) => (p === "app" ? p : (isNew ? "onboarding" : "app")));
+      } else {
+        setItems([]); setActivities([]); setPhase("auth");
+      }
+    });
+    return () => { mounted = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  // keep name / handles / recovered synced to the profiles table, debounced
+  useEffect(() => {
+    if (!session || phase === "loading" || phase === "auth") return;
+    const t = setTimeout(() => {
+      supabase.from("profiles").update({ name: user.name, recovered: user.recovered, handles: user.handles }).eq("id", session.user.id).then();
+    }, 500);
+    return () => clearTimeout(t);
+  }, [user, session, phase]);
+
+  const log = (itemId, entry) => {
+    const row = { item_id: itemId, user_id: session.user.id, date: iso(today()), ...entry };
+    supabase.from("activities").insert(row).select().maybeSingle().then(({ data }) => {
+      if (data) setActivities((a) => [fromDb(ACT_FIELD_MAP, data), ...a]);
+    });
+  };
+
+  const updateItem = (id, patch) => {
+    const { docs, ...rest } = patch;
     setItems((list) => list.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    if (Object.keys(rest).length) {
+      supabase.from("items").update({ ...toDb(ITEM_FIELD_MAP, rest), updated_at: new Date().toISOString() }).eq("id", id).then();
+    }
+    if (docs) {
+      const newDoc = docs[docs.length - 1];
+      if (newDoc) {
+        supabase.from("documents").insert({
+          item_id: id, user_id: session.user.id, file_name: newDoc.name, file_type: newDoc.type, upload_date: newDoc.date,
+        }).select().maybeSingle().then(({ data }) => {
+          if (data) setItems((list) => list.map((i) => (i.id === id
+            ? { ...i, docs: (i.docs || []).map((d) => (d.id === newDoc.id ? { id: data.id, name: data.file_name, type: data.file_type, date: data.upload_date } : d)) }
+            : i)));
+        });
+      }
+    }
+  };
 
   const go = (t, itemsTabName) => {
     setDetailId(null);
@@ -1379,16 +1448,25 @@ export default function OwedApp() {
     setTab(t);
   };
 
-  const saveNew = (f) => {
+  const saveNew = async (f) => {
     const stuffKind = f.kind === "stuff";
-    const it = {
-      id: nid(), kind: f.kind || "money", owedBy: f.owedBy.trim(), description: f.description.trim(), category: f.category,
+    const row = {
+      user_id: session.user.id, kind: f.kind || "money", owed_by: f.owedBy.trim(), description: f.description.trim(), category: f.category,
       amount: stuffKind ? 0 : +f.amount, received: 0, status: stuffKind ? "lent" : "submitted",
-      submittedDate: f.submittedDate, expectedDate: f.expectedDate,
+      submitted_date: f.submittedDate, expected_date: f.expectedDate,
       method: f.method, reference: f.reference, notes: f.notes,
-      reminderDate: f.reminderDate, recurring: f.recurring,
-      docs: f.doc ? [{ id: nid(), name: f.doc, type: stuffKind ? "Image" : "PDF", date: iso(today()) }] : [],
+      reminder_date: f.reminderDate || null, recurring: f.recurring,
     };
+    const { data: created } = await supabase.from("items").insert(row).select().maybeSingle();
+    if (!created) return;
+    let docs = [];
+    if (f.doc) {
+      const { data: doc } = await supabase.from("documents").insert({
+        item_id: created.id, user_id: session.user.id, file_name: f.doc, file_type: stuffKind ? "Image" : "PDF", upload_date: iso(today()),
+      }).select().maybeSingle();
+      if (doc) docs = [{ id: doc.id, name: doc.file_name, type: doc.file_type, date: doc.upload_date }];
+    }
+    const it = { ...fromDb(ITEM_FIELD_MAP, created), docs };
     setItems((l) => [it, ...l]);
     log(it.id, { type: "created", text: stuffKind ? `${it.description} lent to ${it.owedBy}` : `${it.description} added` });
     setDetailId(it.id); setTab("items");
@@ -1416,11 +1494,13 @@ export default function OwedApp() {
     if (full) setRecovered({ amount: item.amount });
   };
 
+  const signOut = async () => { await supabase.auth.signOut(); };
+
+  if (phase === "loading")
+    return <Shell><div className="auth"><div className="auth-hero"><Wordmark size={56} light /></div></div></Shell>;
+
   if (phase === "auth")
-    return <Shell><Auth onEnter={(name, email, isNew) => {
-      setUser((u) => ({ ...u, name: name || u.name, email: email || u.email }));
-      setPhase(isNew ? "onboarding" : "app");
-    }} /></Shell>;
+    return <Shell><Auth /></Shell>;
 
   if (phase === "onboarding")
     return <Shell><Onboarding name={user.name} onDone={(addFirst) => { setPhase("app"); setTab(addFirst ? "add" : "dash"); }} /></Shell>;
@@ -1432,7 +1512,7 @@ export default function OwedApp() {
           <ItemDetail
             item={item} user={user} activities={activities}
             onBack={() => setDetailId(null)}
-            onDelete={() => { setItems((l) => l.filter((i) => i.id !== item.id)); setDetailId(null); }}
+            onDelete={() => { supabase.from("items").delete().eq("id", item.id).then(); setItems((l) => l.filter((i) => i.id !== item.id)); setDetailId(null); }}
             onUpdate={(patch, text) => { updateItem(item.id, patch); log(item.id, { type: "status", text }); }}
             onLog={(entry, patch) => { if (patch) updateItem(item.id, patch); log(item.id, entry); }}
             onFollowUp={() => setShowFollowUp(true)}
@@ -1445,7 +1525,7 @@ export default function OwedApp() {
             {tab === "items" && <ItemsPage key={itemsTab} items={items} initialTab={itemsTab} openItem={setDetailId} />}
             {tab === "add" && <AddItem onSave={saveNew} onCancel={() => setTab("dash")} />}
             {tab === "activity" && <ActivityPage activities={activities} items={items} openItem={setDetailId} />}
-            {tab === "settings" && <SettingsPage user={user} setUser={setUser} />}
+            {tab === "settings" && <SettingsPage user={user} setUser={setUser} onSignOut={signOut} />}
           </>
         )}
       </div>
